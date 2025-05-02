@@ -9,15 +9,19 @@ import * as vscode from "vscode";
 import { Constants } from "../common/constants";
 import { UserCancelledError } from "../common/UserCancelledError";
 import { Utility } from "../common/utility";
-import { AzureAccount, AzureSession } from "../typings/azure-account.api";
+import { VSCodeAzureSubscriptionProvider } from "@microsoft/vscode-azext-azureauth";
+import { TokenCredential } from "@azure/core-auth";
+// import { AzureAccount, AzureSession } from "../typings/azure-account.api";
 import { AcrRegistryQuickPickItem } from "./models/acrRegistryQuickPickItem";
 
 export class AcrManager {
-    private readonly azureAccount: AzureAccount;
+    // private readonly azureAccount: AzureAccount;
     private acrRefreshToken: string;
+    private tokenCredential: TokenCredential;
+
 
     constructor() {
-        this.azureAccount = vscode.extensions.getExtension<AzureAccount>("ms-vscode.azure-account")!.exports;
+        // this.azureAccount = vscode.extensions.getExtension<AzureAccount>("ms-vscode.azure-account")!.exports;
     }
 
     public async selectAcrImage(): Promise<string> {
@@ -44,26 +48,32 @@ export class AcrManager {
     public async getAcrRegistryCredential(address: string): Promise<{ username: string, password: string }> {
         let username: string;
         let password: string;
+        console.log("Azure account Login");
+        this.tokenCredential = await loginWithAzure();
 
-        if (await this.azureAccount.waitForLogin()) {
-            const registriesItems = await this.loadAcrRegistryItems();
-            for (const registryItem of registriesItems) {
-                const registry = registryItem.registry;
-                if (registry.loginServer === address && registry.adminUserEnabled) {
-                    const azureSubscription = registryItem.azureSubscription;
-                    const registryName: string = registry.name;
-                    const resourceGroup: string = Utility.getResourceGroupFromId(registry.id);
-                    const client = new ContainerRegistryManagementClient(
-                        azureSubscription.session.credentials,
-                        azureSubscription.subscription.subscriptionId!,
-                    );
-                    const creds: RegistryListCredentialsResult = await client.registries.listCredentials(resourceGroup, registryName);
-                    username = creds.username;
-                    password = creds.passwords[0].value;
-                    break;
-                }
+        const registriesItems = await this.loadAcrRegistryItems();
+        console.log("Loaded registry items:", registriesItems);
+        for (const registryItem of registriesItems) {
+            console.log("Checking registry:", registryItem.registry.loginServer);
+            const registry = registryItem.registry;
+            if (registry.loginServer === address && registry.adminUserEnabled) {
+                const azureSubscription = registryItem.azureSubscription;
+                const registryName: string = registry.name;
+                const resourceGroup: string = Utility.getResourceGroupFromId(registry.id);
+                console.log("Subscription:", azureSubscription.subscription);
+                console.log("Azure credentials:", azureSubscription.session.credentials);
+
+                const client = new ContainerRegistryManagementClient(
+                    azureSubscription.session.credentials,
+                    azureSubscription.subscription.subscriptionId!,
+                );
+                const creds: RegistryListCredentialsResult = await client.registries.listCredentials(resourceGroup, registryName);
+                username = creds.username;
+                password = creds.passwords[0].value;
+                break;
             }
         }
+        // }
 
         return { username, password };
     }
@@ -77,9 +87,12 @@ export class AcrManager {
 
     private async loadAcrRegistryItems(): Promise<AcrRegistryQuickPickItem[]> {
         try {
-            await this.azureAccount.waitForFilters();
+            const azureAuth: AzureSubscriptionProvider = getAzureSubscriptionProvider();
+            // await this.azureAccount.waitForFilters();
             const registryPromises: Array<Promise<AcrRegistryQuickPickItem[]>> = [];
-            for (const azureSubscription of this.azureAccount.filters) {
+            const subscriptions: AzureSubscription[] = await azureAuth.getSubscriptions(true);
+
+            for (const azureSubscription of subscriptions) {
                 const tokenCredentials = await Utility.aquireTokenCredentials(azureSubscription.session);
                 const client: Registries = new ContainerRegistryManagementClient(
                     tokenCredentials,
