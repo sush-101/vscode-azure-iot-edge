@@ -201,6 +201,10 @@
         "command": "azure-iot-edge.addDevContainer",
         "title": "Add Dev Container definition files",
         "category": "Azure IoT Edge"
+      },
+      {
+        "command": "azure-iot-edge.signInToAzure",
+        "title": "Sign in to Azure"
       }
     ],
     "configuration": {
@@ -566,6 +570,7 @@
     "minimist": "^1.2.6"
   },
   "dependencies": {
+    "@microsoft/vscode-azext-azureauth": "^4.1.1",
     "@azure/arm-containerregistry": "^8.1.1",
     "@azure/arm-machinelearningservices": "^4.1.1",
     "@azure/arm-streamanalytics": "^2.1.1",
@@ -586,7 +591,6 @@
     "@vscode/extension-telemetry": "^0.4.6"
   },
   "extensionDependencies": [
-    "ms-vscode.azure-account",
     "vsciot-vscode.azure-iot-toolkit"
   ]
 }
